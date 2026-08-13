@@ -1,0 +1,49 @@
+# ============================================================
+# 本仓库为公开分发的技能包，严禁提交任何真实项目资料。
+# 规则：默认拒绝一切 Office/PDF 文件，只白名单放行 templates/ 下的空白模板。
+# ============================================================
+
+# --- 一切文档默认不进仓库 ---
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pdf
+*.wps
+*.et
+*.ppt
+*.pptx
+*.txt
+
+# --- 白名单：仅这两个已脱敏的空白模板 ---
+!templates/opinion-template.docx
+!templates/crossvalidation-template.docx
+
+# --- 常见的真实资料目录（放在包内也不提交）---
+测试/
+examples/
+审核-*/
+项目-*/
+底稿/
+成品/
+scratch/
+tmp/
+
+# --- 一次性运行脚本（往往内嵌真实项目数据）---
+scripts/_run_*.py
+*_run_local.py
+配置.json
+config.local.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# --- 系统 ---
+Thumbs.db
+desktop.ini
+.DS_Store
+~$*

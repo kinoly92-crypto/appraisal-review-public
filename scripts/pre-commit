@@ -1,0 +1,21 @@
+#!/bin/sh
+# Git pre-commit 钩子：提交前扫描暂存区，拦截真实客户信息。
+#
+# 安装（在仓库根目录执行一次）：
+#     cp scripts/pre-commit .git/hooks/pre-commit
+#     chmod +x .git/hooks/pre-commit
+#
+# 说明：依次试 python3 / python / py，并要求它**真的能跑**才采用
+# （Windows 上 python/python3 常是 Microsoft Store 的占位程序，
+#  能被 command -v 找到却不能执行，直接用会让所有提交都失败）。
+
+for PY in python3 python py; do
+    if [ "$("$PY" -c "print(42)" 2>/dev/null)" = "42" ]; then
+        exec "$PY" scripts/check_no_leak.py --staged
+    fi
+done
+
+echo "[pre-commit] 未找到可用的 Python 3，泄密扫描未能执行。"
+echo "  本仓库对外公开，未经扫描的提交一律拒绝。"
+echo "  请安装 Python 3，或手动执行： <你的python路径> scripts/check_no_leak.py --staged"
+exit 1
