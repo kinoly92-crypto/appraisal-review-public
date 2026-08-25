@@ -86,6 +86,32 @@ def esc(s):
 RFONTS = ('<w:rFonts w:hint="eastAsia" w:ascii="Times New Roman" w:hAnsi="Times New Roman"'
           ' w:eastAsia="仿宋_GB2312" w:cs="Times New Roman"/>')
 
+# ---------------- 序号＝Word 自动编号（2026-08-25 用户要求） ----------------
+# 为什么不用字面文本「1、」：用户会直接在 Word 里删掉整条意见，字面序号删完就断号。
+# 挂真正的编号列表后，Word 自己重排，删任意一条后面自动顺延。
+# v2 模板不带 numbering.xml，故本脚本从零生成该部件并挂进包里（Content_Types + rels）。
+NUM_ID, ABSTRACT_ID = 20, 20        # 模板无编号列表，取一个不会冲突的编号
+NUMBERING_XML = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    '<w:abstractNum w:abstractNumId="%d">'
+    '<w:multiLevelType w:val="singleLevel"/>'
+    '<w:lvl w:ilvl="0">'
+    '<w:start w:val="1"/>'
+    '<w:numFmt w:val="decimal"/>'
+    '<w:suff w:val="nothing"/>'          # 序号后不加制表符/空格，与原字面「1、」观感一致
+    '<w:lvlText w:val="%%1、"/>'
+    '<w:lvlJc w:val="left"/>'
+    '<w:pPr><w:ind w:left="0" w:leftChars="0" w:firstLine="0" w:firstLineChars="0"/></w:pPr>'
+    '<w:rPr>%s<w:b w:val="0"/><w:bCs w:val="0"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>'
+    '</w:lvl></w:abstractNum>'
+    '<w:num w:numId="%d"><w:abstractNumId w:val="%d"/></w:num>'
+    '</w:numbering>') % (ABSTRACT_ID, RFONTS, NUM_ID, ABSTRACT_ID)
+CT_NUMBERING = ('<Override PartName="/word/numbering.xml" ContentType="application/vnd.'
+                'openxmlformats-officedocument.wordprocessingml.numbering+xml"/>')
+REL_NUMBERING = ('<Relationship Id="rIdNum%d" Type="http://schemas.openxmlformats.org/'
+                 'officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' % NUM_ID)
+
 def rpr(bold=False, sz=24):
     b = '<w:b/><w:bCs/>' if bold else '<w:b w:val="0"/><w:bCs w:val="0"/>'
     return '<w:rPr>%s%s<w:sz w:val="%d"/><w:szCs w:val="%d"/></w:rPr>' % (RFONTS, b, sz, sz)
@@ -94,11 +120,13 @@ def run(text, bold=False, sz=24):
     if text == '': return ''
     return '<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>' % (rpr(bold, sz), esc(text))
 
-def para(runs_xml, bdr=False, indent=False, bold_mark=False):
-    """一个段落。bdr=段落下边框(条目分隔线)；indent=首行缩进2字符。
+def para(runs_xml, bdr=False, indent=False, bold_mark=False, num=False):
+    """一个段落。bdr=段落下边框(条目分隔线)；indent=首行缩进2字符；
+    num=True 挂 Word **自动编号**（序号段专用，见 NUM_ID）。
     pPr 子元素顺序须严格符合 CT_PPr schema 序列，勿随意调换。"""
     p = ['<w:pPr><w:keepNext w:val="0"/><w:keepLines w:val="0"/><w:pageBreakBefore w:val="0"/>'
-         '<w:widowControl w:val="0"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>']
+         '<w:widowControl w:val="0"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="%d"/></w:numPr>'
+         % (NUM_ID if num else 0)]
     if bdr:
         p.append('<w:pBdr><w:bottom w:val="single" w:color="auto" w:sz="4" w:space="0"/></w:pBdr>')
     p.append('<w:kinsoku/><w:wordWrap/><w:overflowPunct/><w:topLinePunct w:val="0"/>'
@@ -120,7 +148,7 @@ def item_block(n, loc, orig, opinion, last=False):
        N、／位置：／原文：／审核意见：／正文／回复：[下边框]／空段[下边框]／空段
     位置、原文为空则该行不输出；审核意见正文含 \n 时拆成多个缩进段。
     last=True（全篇最后一条）省去最后那个不带边框的空段。"""
-    out = [para(run('%d、' % n))]                       # 1、
+    out = [para('', num=True)]        # 序号段：空文本，「N、」由 Word 自动编号生成（删条自动重排）
     if loc:  out.append(para(run('位置：', True) + run(loc)))
     if orig: out.append(para(run('原文：', True) + run(orig)))
     out.append(para(run('审核意见：', True)))
@@ -253,19 +281,41 @@ _bs = find_tables(doc)
 _bt = doc[pick_table(doc, _bs, 1)[0]:pick_table(doc, _bs, 1)[1]]
 if _bt.count('<w:pBdr>') != 2 * n:
     errs.append('正文表内下边框段 %d 个（每条应 2 个，共应 %d 个）' % (_bt.count('<w:pBdr>'), 2 * n))
-nums = [int(x) for x in re.findall(r'<w:t[^>]*>(\d+)、</w:t>', doc)]
-if nums != list(range(1, n + 1)): errs.append('序号不连续：%s（应为 1..%d）' % (nums, n))
+_numbered = doc.count('<w:numId w:val="%d"/>' % NUM_ID)
+if _numbered != n:
+    errs.append('挂自动编号的序号段 %d 个 ≠ 意见条数 %d' % (_numbered, n))
+if re.search(r'<w:t[^>]*>\d+、</w:t>', doc):
+    errs.append('正文中仍存在字面序号（应全部改为 Word 自动编号）')
 for lb, v in (('项目编号：', PROJECT_NO), ('审核人：', REVIEWER), ('审核日期：', REVIEW_DATE)):
     if v and (lb + v) not in plain.replace('\n', ''): errs.append('信息表未写入 %s%s' % (lb, v))
 if len(find_tables(doc)) != 3: errs.append('成品表格数不为 3')
 if errs:
     sys.exit('[FAIL] 自检未通过：\n  - ' + '\n  - '.join(errs))
 
+# ---------------- 打包：把 numbering.xml 挂进包（模板不带该部件） ----------------
+_ct = zin.read('[Content_Types].xml').decode('utf-8')
+if 'numbering+xml' not in _ct:
+    _ct = _ct.replace('</Types>', CT_NUMBERING + '</Types>')
+_rels = zin.read('word/_rels/document.xml.rels').decode('utf-8')
+if 'relationships/numbering' not in _rels:
+    _rels = _rels.replace('</Relationships>', REL_NUMBERING + '</Relationships>')
+try:
+    M.parseString(NUMBERING_XML.encode('utf-8')); M.parseString(_ct.encode('utf-8')); M.parseString(_rels.encode('utf-8'))
+except Exception as e:
+    sys.exit('[FAIL] 编号部件 XML 不合法：%s' % e)
+
 parts = []
+_has_numbering = False
 for it in zin.infolist():
     d = zin.read(it.filename)
     if it.filename == 'word/document.xml': d = doc.encode('utf-8')
+    elif it.filename == '[Content_Types].xml': d = _ct.encode('utf-8')
+    elif it.filename == 'word/_rels/document.xml.rels': d = _rels.encode('utf-8')
+    elif it.filename == 'word/numbering.xml':
+        d = NUMBERING_XML.encode('utf-8'); _has_numbering = True
     parts.append((it, d))
+if not _has_numbering:
+    parts.append(('word/numbering.xml', NUMBERING_XML.encode('utf-8')))
 target = OUTPUT
 try:
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -280,5 +330,6 @@ print('  标题第1行：对《%s》' % PROJECT_NAME)
 print('  标题第2行：%s' % TITLE_LINE2)
 print('  %s | 项目编号 %s | 审核人 %s | 审核日期 %s' % (INDEX_NO, PROJECT_NO, REVIEWER, REVIEW_DATE))
 print('  意见 %d 条，分 %d 个大类：%s' % (n, len(_groups), '、'.join(g[0].rstrip('：') for g in _groups)))
-print('  自检全部通过（XML合法 / 4处占位符已替 / 标题分两行且不重复 / 序号 1..%d 连续 / '
+print('  自检全部通过（XML合法 / 4处占位符已替 / 标题分两行且不重复 / %d 条挂 Word 自动编号且无字面序号 / '
       '回复段 %d 个 / 下边框段 %d 个 / 信息表已写入 / 三表完整）' % (n, n, 2 * n))
+print('  ⭐序号为 Word 自动编号：在 Word 里直接删除整条意见，后续序号自动重排，不会断号。')

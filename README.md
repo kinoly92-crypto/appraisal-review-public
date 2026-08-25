@@ -22,8 +22,12 @@ python scripts/check_env.py
 python scripts/extract.py "报告.docx"
 python scripts/extract.py "测算表.xlsx"
 
-# 3. 审完后，用 JSON 配置生成审核意见
-python scripts/build_opinion.py 配置.json
+# 3. 审完后先出批注版 + 交叉验证，交给人工过目调整批注
+python scripts/build_annotated.py 批注配置.json
+python scripts/build_crossvalidation.py 交叉验证配置.json
+
+# 4. 人工确认"审核意见明确"后，回读改完的批注 → 生成审核意见（序号现场 1..N 重排）
+python scripts/build_opinion_from_annotated.py 意见配置.json          # 加 --preview 只看清单
 ```
 
 **给 AI 助手的话**：把本文件夹整体给它，让它 ① 先完整读 `SKILL.md`；② 再读 `rules/` 下对应报告类型的要点；③ 严格套 `templates/` + 跑 `scripts/` 产出交付物，**不要自由发挥另起格式**。
@@ -39,11 +43,19 @@ python scripts/build_opinion.py 配置.json
 | `GUIDE-for-colleague.md` | 给同事的上手指南 |
 | `cross-platform-checklist.md` | 换电脑／换 AI 平台的一页核对清单 |
 
-## 交付物
+## 交付物（**两批交付，中间夹一道人工介入**）
 
+**第一批**
 1. **批注版报告** —— Word 真批注，直接描述问题
-2. **审核意见** —— 逐条式「位置／原文／审核意见／回复」，按文档大类分组，带回复栏供往复
-3. **交叉验证分析报告** —— 数据对比表 + 图表 + 可点击来源链接
+2. **交叉验证分析报告** —— 数据对比表 + 图表 + 可点击来源链接
+
+**→ 停下来问"审核意见是否明确？"，由人工在 Word 里增删改批注 →**
+
+**第二批**
+
+3. **审核意见** —— 逐条式「位置／原文／审核意见／回复」，按文档大类分组，带回复栏供往复。
+   内容**回读自人工确认后的批注版**（`build_opinion_from_annotated.py`）+ 明细表/测算表意见，
+   **序号在生成时 1..N 现场重排——删掉任意一条，序号仍然连续。**
 
 `build_opinion.py` 生成时会强制自检 7 类问题（XML 合法性、占位符替换、序号连续、结构完整等），**任一不过直接非零退出、不产出文件**。
 
