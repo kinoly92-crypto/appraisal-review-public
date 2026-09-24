@@ -10,7 +10,8 @@
 - 一键安装（可选增强）：`pip install -r requirements.txt`。
 
 ## 流程
-1. **读资料**：`python extract.py "报告.docx"`、`python extract.py "测算表.xlsx"`、`python extract.py --probe "扫描件.pdf"`。
+0. **建目录**：送审文件夹只读；在其同级新建 `审核-<项目号>-<项目简称>\`（放交付成品）及子目录 `_审核工作文件（勿外发）\`（放一切中间件与 JSON 配置），详见 `../rules/deliverable-format.md §0.3`。
+1. **读资料**：`python extract.py "报告.docx" --out "<工作文件夹>"`、`python extract.py "测算表.xlsx" --out "<工作文件夹>"`、`python extract.py --probe "扫描件.pdf"`（输出不写回送审文件夹）。
    - 老 `.doc` 读不出中文 → 请报告方另存 `.docx`。扫描 PDF 无文字层 → 需 OCR 或请对方提供可读版/口述关键信息。
 2. **审核**：按 `../rules/` 对应报告类型逐项核对，**先核测算表再定性**。
 3. **出三件套——分两批，中间等人工**（先问到审核人/批注人姓名）：

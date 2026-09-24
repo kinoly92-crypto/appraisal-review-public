@@ -19,8 +19,8 @@
 python scripts/check_env.py
 
 # 2. 抽取待审资料的文本
-python scripts/extract.py "报告.docx"
-python scripts/extract.py "测算表.xlsx"
+python scripts/extract.py "报告.docx" --out "审核-项目号-简称/_审核工作文件（勿外发）"
+python scripts/extract.py "测算表.xlsx" --out "审核-项目号-简称/_审核工作文件（勿外发）"
 
 # 3. 审完后先出批注版 + 交叉验证，交给人工过目调整批注
 python scripts/build_annotated.py 批注配置.json

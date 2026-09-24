@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """资料读取助手：docx/xlsx 文本提取、PDF 文字层探测、老.doc UTF-16启发式。
 用法示例：
-    python extract.py "某报告.docx"        # 提取docx正文 -> 同名.txt
-    python extract.py "测算表.xlsx"         # 提取非隐藏sheet -> 同名.txt(隐藏/极隐藏sheet自动跳过)
+    python extract.py "某报告.docx" --out "<审核目录>/_审核工作文件（勿外发）"   # -> 该目录下同名.txt
+    python extract.py "测算表.xlsx" --out "<工作目录>"   # 非隐藏sheet(隐藏/极隐藏自动跳过)；缺省 --out = 当前目录
+    （送审文件夹只读：输出绝不写回送审文件夹）
     python extract.py --probe "某.pdf"      # 探测PDF是否有文字层
 说明：老式OLE2二进制.doc多半读不出中文，请让报告方另存为.docx。
 """
@@ -87,7 +88,8 @@ def doc_utf16(f):
 
 def probe_pdf(f):
     import subprocess
-    tmp = f + ".__probe.txt"
+    import tempfile
+    tmp = os.path.join(tempfile.gettempdir(), "__probe_%d.txt" % os.getpid())   # 不写进送审文件夹
     os.system('pdftotext -f 1 -l 8 -enc UTF-8 "%s" "%s"' % (f, tmp))
     n = os.path.getsize(tmp) if os.path.exists(tmp) else 0
     if os.path.exists(tmp): os.remove(tmp)
@@ -95,6 +97,11 @@ def probe_pdf(f):
 
 if __name__ == '__main__':
     args = sys.argv[1:]
+    # 输出目录：--out 指定（应为 审核-<项目号>-<简称>\_审核工作文件（勿外发）），缺省=当前工作目录。
+    # 送审文件夹只读，任何中间文件都不得写回送审文件夹。
+    outdir = None
+    if '--out' in args:
+        i = args.index('--out'); outdir = args[i + 1]; del args[i:i + 2]
     if args and args[0] == '--probe':
         n = probe_pdf(args[1]); print("PDF前8页文字层 %d 字节 -> %s" % (n, "有文字层可读" if n > 100 else "扫描件/无文字层，需OCR或转换"))
     else:
@@ -103,6 +110,10 @@ if __name__ == '__main__':
         elif low.endswith('.xlsx'): t = xlsx_text(f)
         elif low.endswith('.doc'): t = doc_utf16(f)
         else: print("不支持的格式"); sys.exit(1)
-        out = os.path.splitext(f)[0] + ".txt"
+        outdir = outdir or os.getcwd()
+        os.makedirs(outdir, exist_ok=True)
+        out = os.path.join(outdir, os.path.splitext(os.path.basename(f))[0] + ".txt")
+        if os.path.abspath(os.path.dirname(out)) == os.path.abspath(os.path.dirname(f)):
+            print("[WARN] 输出落在送审文件夹内，违反“送审只读”规则，请改用 --out 指向 _审核工作文件（勿外发）")
         open(out, 'w', encoding='utf-8').write(t)
         print("CJK字:", sum(len(s) for s in re.findall(r'[一-鿿]+', t)), "-> ", out)
